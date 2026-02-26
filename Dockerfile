@@ -35,9 +35,9 @@ RUN apt-get update && \
 WORKDIR /builder
 
 # Copy all build scripts
-COPY build-*.sh /builder/
-RUN chmod +x /builder/build-*.sh && \
-    chown -R 1000:1000 /builder/build-*.sh
+COPY scripts/build-*.sh /builder/scripts/
+RUN chmod +x /builder/scripts/build-*.sh && \
+    chown -R 1000:1000 /builder/scripts/build-*.sh
 
 # Switch to non-root user (UID 1000, default in Ubuntu)
 USER 1000

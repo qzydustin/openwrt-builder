@@ -18,57 +18,55 @@ docker build -t openwrt-builder .
 
 ### 2. Run Build
 
-Specify the configuration file as an argument to the build script:
-
 ```bash
-# Example: Build for IPQ platform with a specific config
-docker run --rm \
-  -v "$(pwd):/builder" \
-  --user "$(id -u):$(id -g)" \
-  openwrt-builder /builder/build-ipq.sh config/<device>.config
+./build.sh <distro> <device>
 
-# For other platforms, use the corresponding build script
-# docker run --rm \
-#   -v "$(pwd):/builder" \
-#   --user "$(id -u):$(id -g)" \
-#   openwrt-builder /builder/build-<platform>.sh config/<device>.config
+# Example: Build for IPQ platform
+./build.sh ipq qihoo-360v6
+./build.sh ipq linksys-mx4300
+
+# Run without arguments to see available options
+./build.sh
 ```
 
-**Note**: The `--user` flag ensures files created in the container are owned by your host user, avoiding permission issues.
+The build script automatically builds the Docker image on first run.
 
 ## Build Process
 
 1. Downloads OpenWrt source code from configured repository (if not present)
 2. Applies patches from `patch/` directory
 3. Compiles firmware using the specified configuration file
-4. Outputs firmware archive: `openwrt-<timestamp>.tar.gz`
+4. Outputs firmware archive to `output/openwrt-<timestamp>.tar.gz`
 
-**Platform Support**: This project supports multiple platforms through platform-specific build scripts:
-- `build-ipq.sh`: IPQ platform
-- Additional platform scripts can be added as `build-<platform>.sh`
-
-Specify the build script when running the container (see Run Build section above).
+**Platform Support**: This project supports multiple platforms through platform-specific build scripts and config directories:
+- `scripts/build-ipq.sh` + `config/ipq/`: Qualcomm IPQ platform (qosmio/openwrt-ipq)
+- Additional platforms can be added as `scripts/build-<distro>.sh` + `config/<distro>/`
 
 ## Project Structure
 
 ```
 openwrt-builder/
-├── build-ipq.sh         # IPQ platform build script
-├── build-*.sh           # Other platform build scripts (future)
+├── build.sh             # Entry point script
 ├── Dockerfile           # Docker image definition
+├── scripts/             # Platform build scripts
+│   └── build-ipq.sh     # IPQ platform build script
 ├── config/              # Device configurations
-│   ├── qihoo-360v6.config
-│   └── linksys-mx4300.config
-└── patch/               # Patches (optional)
-    └── *.patch
+│   └── ipq/             # IPQ platform configs
+│       ├── qihoo-360v6.config
+│       └── linksys-mx4300.config
+├── patch/               # Patches (optional)
+│   └── *.patch
+└── output/              # Build outputs (git-ignored)
+    ├── openwrt-ipq/     # Source code and build cache
+    └── openwrt-*.tar.gz # Firmware archives
 ```
 
 ## Device Configurations
 
-Device configurations are stored in the `config/` directory. Specify the configuration file as an argument when running the build script:
+Device configurations are organized by distro in the `config/` directory:
 
 ```bash
-/builder/build-ipq.sh config/<device>.config
+config/<distro>/<device>.config
 ```
 
 ## Environment Variables
@@ -86,7 +84,7 @@ The container runs as non-root user (builder, UID 1000) for security.
 **Clean rebuild**:
 ```bash
 docker rmi openwrt-builder
-# Remove local OpenWrt source directory if needed (auto-downloaded, not in repo)
+rm -rf output/
 docker build -t openwrt-builder .
 ```
 
