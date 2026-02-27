@@ -19,7 +19,7 @@ RUN apt-get update && \
         g++-multilib \
         gettext \
         git \
-        libncurses5-dev \
+        libncurses-dev \
         libssl-dev \
         python3-setuptools \
         rsync \
@@ -31,13 +31,11 @@ RUN apt-get update && \
         ca-certificates && \
     rm -rf /var/lib/apt/lists/*
 
-# Set working directory
-WORKDIR /builder
+# Create build user
+RUN groupadd -g 1001 builder && \
+    useradd -u 1001 -g builder -m -s /bin/bash builder
 
-# Copy all build scripts
-COPY scripts/build-*.sh /builder/scripts/
-RUN chmod +x /builder/scripts/build-*.sh && \
-    chown -R 1000:1000 /builder/scripts/build-*.sh
+WORKDIR /build
+RUN chown builder:builder /build
 
-# Switch to non-root user (UID 1000, default in Ubuntu)
-USER 1000
+USER builder

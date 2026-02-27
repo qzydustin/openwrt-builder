@@ -28,7 +28,7 @@ fi
 DISTRO="$1"
 DEVICE="$2"
 CONFIG="config/${DISTRO}/${DEVICE}.config"
-BUILD_SCRIPT="scripts/build-${DISTRO}.sh"
+BUILD_SCRIPT="build-${DISTRO}.sh"
 
 if [ ! -f "$SCRIPT_DIR/$CONFIG" ]; then
   echo "Error: Config not found: $CONFIG" >&2
@@ -39,8 +39,8 @@ if [ ! -f "$SCRIPT_DIR/$CONFIG" ]; then
   exit 1
 fi
 
-if [ ! -f "$SCRIPT_DIR/$BUILD_SCRIPT" ]; then
-  echo "Error: Build script not found: $BUILD_SCRIPT" >&2
+if [ ! -f "$SCRIPT_DIR/scripts/$BUILD_SCRIPT" ]; then
+  echo "Error: Build script not found: scripts/$BUILD_SCRIPT" >&2
   exit 1
 fi
 
@@ -54,9 +54,9 @@ mkdir -p "$OUTPUT_DIR"
 
 docker run --rm \
   --platform "$PLATFORM" \
-  -v "$SCRIPT_DIR/scripts:/builder/scripts:ro" \
-  -v "$SCRIPT_DIR/config:/input/config:ro" \
-  -v "$SCRIPT_DIR/patch:/input/patch:ro" \
+  -v "$SCRIPT_DIR/scripts:/scripts:ro" \
+  -v "$SCRIPT_DIR/config:/config:ro" \
+  -v "$SCRIPT_DIR/patch:/patch:ro" \
+  -v openwrt-build:/build \
   -v "$OUTPUT_DIR:/output" \
-  --user "$(id -u):$(id -g)" \
-  "$IMAGE_NAME" "/builder/$BUILD_SCRIPT" "$CONFIG"
+  "$IMAGE_NAME" "/scripts/$BUILD_SCRIPT" "$CONFIG"

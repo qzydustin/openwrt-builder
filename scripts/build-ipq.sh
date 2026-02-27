@@ -8,9 +8,9 @@ set -euo pipefail
 # Example: build-ipq.sh config/ipq/qihoo-360v6.config
 
 # Paths (inside container)
-INPUT="/input"
 OUTPUT="/output"
-OPENWRT="${OUTPUT}/openwrt-ipq"
+WORKDIR="/build"
+OPENWRT="${WORKDIR}/openwrt-ipq"
 
 # Get config file from argument
 if [ $# -lt 1 ]; then
@@ -20,34 +20,27 @@ if [ $# -lt 1 ]; then
     exit 1
 fi
 
-CONFIG_SRC="${INPUT}/$1"
-[ -f "$CONFIG_SRC" ] || { echo "Error: Configuration file not found: $CONFIG_SRC" >&2; exit 1; }
+CONFIG_SRC="/$1"
+[ -f "$CONFIG_SRC" ] || { echo "Error: Config not found: $CONFIG_SRC" >&2; exit 1; }
 
-# 1) Fetch source (IPQ platform: qosmio/openwrt-ipq, branch main-nss)
+# 1) Fetch source
 if [ ! -d "$OPENWRT/.git" ]; then
   git clone --branch main-nss --depth 1 https://github.com/qosmio/openwrt-ipq "$OPENWRT"
 else
-  cd "$OPENWRT"
-  git fetch origin main-nss
-  git reset --hard origin/main-nss
-  cd "$OUTPUT"
+  git -C "$OPENWRT" fetch origin main-nss
+  git -C "$OPENWRT" reset --hard origin/main-nss
 fi
 
-# Set SOURCE_DATE_EPOCH from git commit timestamp for reproducible builds
 cd "$OPENWRT"
-main_epoch=$(git show -s --format=%ct HEAD)
-export SOURCE_DATE_EPOCH=$main_epoch
+export SOURCE_DATE_EPOCH=$(git show -s --format=%ct HEAD)
 
 # 2) Prep
-# Clean previous build outputs
-if [ -d "bin/targets" ]; then
-  rm -rf bin/targets/*
-fi
+rm -rf bin/targets
 
 # Apply patches
-PATCH_DIR="${INPUT}/patch"
+PATCH_DIR="/patch"
 if [ -d "$PATCH_DIR" ]; then
-  find "$PATCH_DIR" -name "*.patch" -type f | sort | while read -r patch_file; do
+  while read -r patch_file; do
     if git apply --check "$patch_file" 2>/dev/null; then
       git apply "$patch_file"
       echo "Applied: $(basename "$patch_file")"
@@ -57,20 +50,16 @@ if [ -d "$PATCH_DIR" ]; then
       echo "ERROR: Failed to apply: $(basename "$patch_file")" >&2
       exit 1
     fi
-  done
+  done < <(find "$PATCH_DIR" -name "*.patch" -type f | sort)
 fi
 
-# Feeds setup
+# Feeds
 [ -f feeds.conf ] || cp feeds.conf.default feeds.conf
-
-# Official feeds: update and install all
 ./scripts/feeds update -a
 ./scripts/feeds install -a
 
-# Third-party feed: install only specific package
 grep -q "^src-git qosmio " feeds.conf || \
   echo "src-git qosmio https://github.com/qosmio/packages-extra" >> feeds.conf
-
 ./scripts/feeds update qosmio
 ./scripts/feeds install -p qosmio luci-mod-status-nss
 
@@ -78,26 +67,10 @@ grep -q "^src-git qosmio " feeds.conf || \
 cp "$CONFIG_SRC" .config
 make defconfig
 sed -i 's/^CONFIG_FEED_qosmio=.*/# CONFIG_FEED_qosmio is not set/' .config
-# Set kernel build user and host from environment variables
-if [ -n "${KBUILD_BUILD_USER:-}" ]; then
-  grep -q '^CONFIG_KERNEL_BUILD_USER=' .config && \
-    sed -i "s/^CONFIG_KERNEL_BUILD_USER=.*/CONFIG_KERNEL_BUILD_USER=\"${KBUILD_BUILD_USER}\"/" .config || \
-    echo "CONFIG_KERNEL_BUILD_USER=\"${KBUILD_BUILD_USER}\"" >> .config
-fi
-if [ -n "${KBUILD_BUILD_HOST:-}" ]; then
-  grep -q '^CONFIG_KERNEL_BUILD_DOMAIN=' .config && \
-    sed -i "s/^CONFIG_KERNEL_BUILD_DOMAIN=.*/CONFIG_KERNEL_BUILD_DOMAIN=\"${KBUILD_BUILD_HOST}\"/" .config || \
-    echo "CONFIG_KERNEL_BUILD_DOMAIN=\"${KBUILD_BUILD_HOST}\"" >> .config
-fi
 
 # 3) Download and build
 make download -j"$(nproc)"
-
-# Build
-make -j"$(nproc)" || {
-  echo "Parallel build failed, retrying single-threaded..."
-  make -j1 V=s
-}
+make -j"$(nproc)" || make -j1 V=s
 
 # 4) Package build outputs
 TARGETS_DIR="${OPENWRT}/bin/targets"
